@@ -1,0 +1,504 @@
+import { ReactFlowProvider } from '@xyflow/react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { DocsWorkspace } from './docs/DocsWorkspace'
+import { getFlow, saveFlow } from './api/flowApi'
+import type { FlowDocument } from './canvas/flowTypes'
+import { FlowCanvas } from './canvas/FlowCanvas'
+import { NodePalette } from './palette/NodePalette'
+import { VoiceConversationPanel } from './realtime/VoiceConversationPanel'
+import { useRealtimeFlow } from './realtime/useRealtimeFlow'
+import { NodeDetailsPanel } from './side-panel/NodeDetailsPanel'
+import { useFlowEditorStore } from './state/flowEditorStore'
+import { WorkflowTasksTable } from './tasks/WorkflowTasksTable'
+
+type WorkspaceTab = 'flowchart' | 'tasks' | 'docs'
+
+function getFlowSignature(flow: FlowDocument) {
+  return JSON.stringify({
+    aiContext: flow.aiContext,
+    description: flow.description,
+    settings: flow.settings,
+    edges: flow.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      sourceHandle: edge.sourceHandle,
+      target: edge.target,
+      targetHandle: edge.targetHandle,
+      label: typeof edge.label === 'string' ? edge.label : '',
+    })),
+    docs: flow.docs.map((doc) => ({
+      body: doc.body,
+      id: doc.id,
+      nodeId: doc.nodeId,
+      title: doc.title,
+      updatedAt: doc.updatedAt,
+    })),
+    id: flow.id,
+    name: flow.name,
+    nodes: flow.nodes.map((node) => ({
+      data: {
+        description: node.data.description,
+        kind: node.data.kind,
+        notes: node.data.notes.map((note) => ({
+          body: note.body,
+          id: note.id,
+        })),
+        title: node.data.title,
+      },
+      id: node.id,
+      position: node.position,
+      type: node.type,
+    })),
+    tasks: flow.tasks.map((task) => ({
+      assignee: task.assignee,
+      channel: task.channel,
+      details: task.details,
+      due: task.due,
+      id: task.id,
+      nodeId: task.nodeId,
+      sourceNoteId: task.sourceNoteId,
+      status: task.status,
+      title: task.title,
+    })),
+  })
+}
+
+function WorkspaceTabButton({
+  active,
+  children,
+  count,
+  onClick,
+}: {
+  active: boolean
+  children: string
+  count?: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+        active
+          ? 'bg-white text-zinc-950 shadow-[0_18px_30px_-26px_rgba(24,24,27,0.45)] ring-1 ring-zinc-950/8'
+          : 'text-zinc-500 hover:bg-white hover:text-zinc-950'
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <div>{children}</div>
+      {typeof count === 'number' ? (
+        <p
+          className={`rounded-full px-1.5 py-0.5 text-[0.72rem] font-semibold tabular-nums ${
+            active
+              ? 'bg-zinc-100 text-zinc-700'
+              : 'bg-zinc-100/80 text-zinc-500'
+          }`}
+        >
+          {count}
+        </p>
+      ) : null}
+    </button>
+  )
+}
+
+function EdgeModeButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean
+  children: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      className={`rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+        active
+          ? 'bg-zinc-950 text-white'
+          : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      {children}
+    </button>
+  )
+}
+
+export function FlowEditorPage() {
+  const { flowId } = useParams()
+  const [activeWorkspaceTab, setActiveWorkspaceTab] =
+    useState<WorkspaceTab>('flowchart')
+  const [contextOpen, setContextOpen] = useState(false)
+  const aiContext = useFlowEditorStore((state) => state.aiContext)
+  const edges = useFlowEditorStore((state) => state.edges)
+  const flowDescription = useFlowEditorStore((state) => state.flowDescription)
+  const flowName = useFlowEditorStore((state) => state.flowName)
+  const settings = useFlowEditorStore((state) => state.settings)
+  const nodes = useFlowEditorStore((state) => state.nodes)
+  const docs = useFlowEditorStore((state) => state.docs)
+  const tasks = useFlowEditorStore((state) => state.tasks)
+  const loadFlow = useFlowEditorStore((state) => state.loadFlow)
+  const setAiContext = useFlowEditorStore((state) => state.setAiContext)
+  const setEdgeLineMode = useFlowEditorStore((state) => state.setEdgeLineMode)
+  const realtime = useRealtimeFlow(flowId ?? '')
+  const lastSavedSignatureRef = useRef<string | null>(null)
+  const hasLoadedFlowRef = useRef(false)
+  const flowQuery = useQuery({
+    queryKey: ['flow', flowId],
+    queryFn: () => getFlow(flowId!),
+    enabled: Boolean(flowId),
+  })
+
+  useEffect(() => {
+    if (flowQuery.data) {
+      loadFlow(flowQuery.data)
+      lastSavedSignatureRef.current = getFlowSignature(flowQuery.data)
+      hasLoadedFlowRef.current = true
+    }
+  }, [flowQuery.data, loadFlow])
+
+  const currentFlowPayload = useMemo(
+    () => ({
+      aiContext,
+      description: flowDescription,
+      docs,
+      edges,
+      id: flowId ?? '',
+      name: flowName,
+      nodes,
+      settings,
+      tasks,
+    }),
+    [aiContext, docs, edges, flowDescription, flowId, flowName, nodes, settings, tasks],
+  )
+  const currentFlowSignature = useMemo(
+    () => getFlowSignature(currentFlowPayload),
+    [currentFlowPayload],
+  )
+
+  const saveFlowMutation = useMutation({
+    mutationFn: () =>
+      saveFlow(flowId!, {
+        aiContext,
+        description: flowDescription,
+        docs,
+        edges,
+        name: flowName,
+        nodes,
+        settings,
+        tasks,
+      }),
+    onSuccess: (flow) => {
+      lastSavedSignatureRef.current = getFlowSignature(flow)
+      loadFlow(flow)
+    },
+  })
+
+  useEffect(() => {
+    if (
+      !flowId ||
+      !hasLoadedFlowRef.current ||
+      flowQuery.isPending ||
+      flowQuery.isError ||
+      currentFlowSignature === lastSavedSignatureRef.current
+    ) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      saveFlow(flowId, currentFlowPayload)
+        .then((flow) => {
+          lastSavedSignatureRef.current = getFlowSignature(flow)
+        })
+        .catch(() => {
+          lastSavedSignatureRef.current = null
+        })
+    }, 800)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    currentFlowPayload,
+    currentFlowSignature,
+    flowId,
+    flowQuery.isError,
+    flowQuery.isPending,
+  ])
+
+  if (!flowId) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-zinc-50 p-6">
+        <p className="text-sm text-zinc-600">Missing flow ID.</p>
+      </main>
+    )
+  }
+
+  if (flowQuery.isPending) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-zinc-50 p-6">
+        <p className="text-sm text-zinc-600">Loading flow...</p>
+      </main>
+    )
+  }
+
+  if (flowQuery.isError) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-zinc-50 p-6 text-center">
+        <div>
+          <p className="text-sm font-semibold text-zinc-950">Flow not available</p>
+          <p className="mt-1 text-sm text-zinc-600">
+            Check that the backend is running and the flow ID exists.
+          </p>
+          <Link
+            className="mt-4 inline-flex rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            to="/flows"
+          >
+            Go back
+          </Link>
+        </div>
+      </main>
+    )
+  }
+
+  const realtimeButtonLabel = realtime.isConnecting
+    ? 'Connecting...'
+    : realtime.isActive
+      ? 'Stop'
+      : 'Talk to flow'
+  const showRealtimePanel =
+    realtime.isActive ||
+    realtime.isConnecting ||
+    Boolean(realtime.error) ||
+    realtime.messages.length > 0
+  const hasUnsavedChanges = currentFlowSignature !== lastSavedSignatureRef.current
+  const saveStatusLabel = saveFlowMutation.isPending
+    ? 'Saving changes'
+    : hasUnsavedChanges
+      ? 'Unsaved changes'
+      : 'Saved'
+  const saveStatusDotClass = saveFlowMutation.isPending
+    ? 'bg-amber-500'
+    : hasUnsavedChanges
+      ? 'bg-blue-500'
+      : 'bg-emerald-500'
+  const workspaceStatusDetail = realtime.error
+    ? realtime.error
+    : realtime.activity
+      ? realtime.activity
+      : saveFlowMutation.isPending
+        ? 'Syncing to workspace'
+        : hasUnsavedChanges
+          ? 'Autosave pending'
+          : 'All changes synced'
+
+  return (
+    <ReactFlowProvider>
+      <div className="isolate flex h-dvh w-screen overflow-hidden bg-[oklch(0.982_0.003_240)] text-zinc-950 antialiased">
+        <NodePalette
+          isCanvasActive={activeWorkspaceTab === 'flowchart'}
+          onOpenFlowchart={() => setActiveWorkspaceTab('flowchart')}
+        />
+        <main className="flex min-w-0 flex-1 flex-col">
+          <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-zinc-950/8 bg-white/92 px-5 py-4 backdrop-blur-md">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+              <Link
+                aria-label="Back to flows"
+                className="grid size-11 place-items-center rounded-xl bg-white text-zinc-700 ring-1 ring-zinc-950/8 transition hover:bg-zinc-50 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                to="/flows"
+              >
+                <svg
+                  aria-hidden="true"
+                  className="size-4"
+                  fill="none"
+                  viewBox="0 0 16 16"
+                >
+                  <path
+                    d="M9.5 3.5L5 8l4.5 4.5"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+              </Link>
+
+              <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                <div className="grid min-w-0 gap-1">
+                  <p className="text-[0.72rem] font-medium text-zinc-500">
+                    Flow workspace
+                  </p>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <h1 className="truncate text-lg font-semibold tracking-tight text-zinc-950">
+                      {flowName}
+                    </h1>
+                    <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-2.5 py-1 text-[0.72rem] font-semibold text-zinc-700 ring-1 ring-zinc-950/8">
+                      <div className={`size-2 rounded-full ${saveStatusDotClass}`} />
+                      <p>{saveStatusLabel}</p>
+                    </div>
+                  </div>
+                  <p className="max-w-[64ch] truncate text-sm text-zinc-600">
+                    {flowDescription || 'Map the workflow, capture context, and keep execution work close to the node.'}
+                  </p>
+                </div>
+
+                <nav
+                  aria-label="Workspace"
+                  className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl bg-zinc-100/90 p-1 ring-1 ring-zinc-950/8"
+                >
+                  <WorkspaceTabButton
+                    active={activeWorkspaceTab === 'flowchart'}
+                    onClick={() => setActiveWorkspaceTab('flowchart')}
+                  >
+                    Flowchart
+                  </WorkspaceTabButton>
+                  <WorkspaceTabButton
+                    active={activeWorkspaceTab === 'tasks'}
+                    count={tasks.length}
+                    onClick={() => setActiveWorkspaceTab('tasks')}
+                  >
+                    Tasks
+                  </WorkspaceTabButton>
+                  <WorkspaceTabButton
+                    active={activeWorkspaceTab === 'docs'}
+                    count={docs.length}
+                    onClick={() => setActiveWorkspaceTab('docs')}
+                  >
+                    Docs
+                  </WorkspaceTabButton>
+                </nav>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                className={`rounded-xl px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                  aiContext.trim()
+                    ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100 hover:bg-blue-100'
+                    : 'bg-zinc-100 text-zinc-800 hover:bg-zinc-200'
+                }`}
+                onClick={() => setContextOpen(true)}
+                type="button"
+              >
+                Context
+              </button>
+
+              <div className="inline-flex items-center gap-1 rounded-xl bg-white p-1 pr-1.5 ring-1 ring-zinc-950/8">
+                <p className="px-2 text-[0.72rem] font-medium text-zinc-500">Lines</p>
+                <EdgeModeButton
+                  active={settings.edgeLineMode === 'curved'}
+                  onClick={() => setEdgeLineMode('curved')}
+                >
+                  Curved
+                </EdgeModeButton>
+                <EdgeModeButton
+                  active={settings.edgeLineMode === 'straight'}
+                  onClick={() => setEdgeLineMode('straight')}
+                >
+                  Straight
+                </EdgeModeButton>
+              </div>
+
+              <div className="hidden max-w-64 rounded-xl bg-white px-3 py-2.5 ring-1 ring-zinc-950/8 lg:block">
+                <p className="text-[0.72rem] font-medium text-zinc-500">Workspace</p>
+                {realtime.error ? (
+                  <p className="truncate text-sm font-medium text-red-600">
+                    {workspaceStatusDetail}
+                  </p>
+                ) : (
+                  <p className="truncate text-sm font-medium text-zinc-700">
+                    {workspaceStatusDetail}
+                  </p>
+                )}
+              </div>
+
+              <button
+                className="rounded-xl bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                disabled={saveFlowMutation.isPending}
+                onClick={() => saveFlowMutation.mutate()}
+                type="button"
+              >
+                {saveFlowMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                aria-pressed={realtime.isActive}
+                className={`rounded-xl px-3 py-2 text-sm font-semibold text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                  realtime.isActive
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+                onClick={realtime.toggle}
+                type="button"
+              >
+                {realtimeButtonLabel}
+              </button>
+            </div>
+          </header>
+          {activeWorkspaceTab === 'flowchart' ? (
+            <div className="flex min-h-0 flex-1">
+              <FlowCanvas />
+              {showRealtimePanel ? (
+                <VoiceConversationPanel
+                  activity={realtime.activity}
+                  error={realtime.error}
+                  isActive={realtime.isActive}
+                  isConnecting={realtime.isConnecting}
+                  messages={realtime.messages}
+                  onClear={realtime.clearMessages}
+                />
+              ) : (
+                <NodeDetailsPanel />
+              )}
+            </div>
+          ) : activeWorkspaceTab === 'tasks' ? (
+            <WorkflowTasksTable
+              onOpenNode={() => setActiveWorkspaceTab('flowchart')}
+            />
+          ) : (
+            <DocsWorkspace onOpenNode={() => setActiveWorkspaceTab('flowchart')} />
+          )}
+        </main>
+        {contextOpen ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/30 p-5">
+            <div className="w-full max-w-2xl rounded-lg bg-white shadow-2xl ring-1 ring-zinc-950/10">
+              <div className="flex items-start justify-between gap-4 border-b border-zinc-950/10 p-5">
+                <div>
+                  <p className="text-base font-semibold text-zinc-950">
+                    Flow context
+                  </p>
+                  <p className="mt-1 max-w-[64ch] text-sm text-pretty text-zinc-600">
+                    Add people, roles, assignment rules, channels, and project
+                    background for this flow.
+                  </p>
+                </div>
+                <button
+                  className="rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  onClick={() => setContextOpen(false)}
+                  type="button"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="grid gap-3 p-5">
+                <textarea
+                  className="min-h-72 resize-none rounded-lg border border-zinc-950/10 bg-white p-3 text-sm text-zinc-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  onChange={(event) => setAiContext(event.target.value)}
+                  placeholder={`People and rules:
+Rahul owns WhatsApp follow-ups.
+Asha handles approvals.
+Payment tasks go to Finance.
+If the task is about customer follow-up, assign it to Rahul.`}
+                  value={aiContext}
+                />
+                <p className="text-sm text-zinc-500">
+                  This autosaves with the flow and is sent to voice mode when
+                  you click Talk to flow.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </ReactFlowProvider>
+  )
+}
