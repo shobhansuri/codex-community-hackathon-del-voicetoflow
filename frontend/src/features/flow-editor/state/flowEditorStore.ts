@@ -106,6 +106,11 @@ type FlowEditorState = {
     targetNodeId: string,
     label?: string,
   ) => void
+  disconnectNodes: (params: {
+    edgeId?: string
+    sourceNodeId?: string
+    targetNodeId?: string
+  }) => number
   updateNodeData: (
     nodeId: string,
     updates: Partial<FlowNode['data']>,
@@ -334,6 +339,37 @@ export const useFlowEditorStore = create<FlowEditorState>((set) => ({
         selectedNodeId: targetNodeId,
       }
     }),
+  disconnectNodes: ({ edgeId = '', sourceNodeId = '', targetNodeId = '' }) => {
+    let removedCount = 0
+
+    set((state) => {
+      const nextEdges = state.edges.filter((edge) => {
+        const shouldRemove = edgeId
+          ? edge.id === edgeId
+          : edge.source === sourceNodeId &&
+            (!targetNodeId || edge.target === targetNodeId)
+
+        if (shouldRemove) {
+          removedCount += 1
+          return false
+        }
+
+        return true
+      })
+
+      if (removedCount === 0) {
+        return state
+      }
+
+      return {
+        edges: normalizeDecisionEdges(state.nodes, nextEdges).map((edge) =>
+          applyEdgeLineMode(edge, state.settings.edgeLineMode),
+        ),
+      }
+    })
+
+    return removedCount
+  },
   updateNodeData: (nodeId, updates) =>
     set((state) => ({
       nodes: state.nodes.map((node) =>

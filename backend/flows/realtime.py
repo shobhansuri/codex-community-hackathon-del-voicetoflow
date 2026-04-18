@@ -75,6 +75,10 @@ REALTIME_TOOLS = [
             'afterNodeId': _string_schema(
                 'Optional existing node ID to connect from after creation.',
             ),
+            'branchLabel': _string_schema(
+                'Use only when afterNodeId is a decision node. Set yes or no for the branch label, or blank if not applicable.',
+                enum=['', 'yes', 'no'],
+            ),
             'x': {'type': 'number', 'description': 'Optional canvas x position.'},
             'y': {'type': 'number', 'description': 'Optional canvas y position.'},
         },
@@ -113,6 +117,22 @@ REALTIME_TOOLS = [
             'label': _string_schema('Optional edge label.'),
         },
         ['sourceNodeId', 'targetNodeId'],
+    ),
+    _tool(
+        'disconnect_nodes',
+        'Remove an existing connection line between nodes. This does not delete any nodes, tasks, notes, or docs.',
+        {
+            'edgeId': _string_schema(
+                'Existing edge ID to remove, or blank to match by source and target.',
+            ),
+            'sourceNodeId': _string_schema(
+                'Existing source node ID. Required when edgeId is blank.',
+            ),
+            'targetNodeId': _string_schema(
+                'Existing target node ID. Optional when edgeId is provided.',
+            ),
+        },
+        [],
     ),
     _tool(
         'move_node',
@@ -239,17 +259,30 @@ def build_realtime_instructions(flow: Flow) -> str:
     context = build_flow_context(flow)
     return (
         'You are VoiceToFlow, a voice assistant for editing a React Flow'
-        ' flowchart. Convert the user speech into small tool calls. Use the'
-        ' provided node IDs when editing existing nodes. If the target node is'
-        ' ambiguous, ask one short clarification instead of guessing. Do not'
-        ' invent assignees, due dates, or node names. Use the flow-level'
+        ' flowchart. Be concise and action-first. Prefer tool calls over long'
+        ' explanations. After a successful edit, say at most one short sentence,'
+        ' such as "Done" or "Added it." Do not explain the UI or narrate every'
+        ' tool call. Ask questions only when blocked by ambiguity that would'
+        ' cause a wrong edit; ask one short question at a time. Convert the user'
+        ' speech into small tool calls. Use the provided node IDs when editing'
+        ' existing nodes. If the target node is ambiguous, ask one short'
+        ' clarification instead of guessing. Do not invent assignees, due dates,'
+        ' or node names. Use the flow-level'
         ' aiContext for people, role, ownership, channel, naming, and assignment'
         ' rules. If aiContext clearly maps a type of work to a person, assign'
         ' the matching task to that person. Prefer process nodes for'
-        ' normal steps and decision nodes only for branches. Use add_note for'
-        ' planning thoughts, create_task for execution work, and create_doc for'
+        ' normal steps and decision nodes only for branches. When creating or'
+        ' connecting a child from a decision node, label the edge YES or NO. For'
+        ' create_node, pass branchLabel yes or no when the user wording clearly'
+        ' implies success/approved/true or failure/rejected/false. If the branch'
+        ' is unclear, ask one short clarification: "Is this the Yes path or No'
+        ' path?" Use add_note for planning thoughts, create_task for execution'
+        ' work, and create_doc for'
         ' longer independent page-like content. Use move_node when the user asks'
-        ' to reorder, arrange, or move items on the canvas. Use fetch_all_notes'
+        ' to reorder, arrange, or move items on the canvas. Use disconnect_nodes'
+        ' when the user asks to remove, detach, disconnect, or fix a wrong line;'
+        ' this only removes the connection and does not delete nodes. Use'
+        ' fetch_all_notes'
         ' before editing notes if the needed note ID or text is not already in'
         ' context. When creating the next step after a visible or selected node,'
         ' pass that node ID as afterNodeId so the new node is placed directly'

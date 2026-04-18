@@ -75,6 +75,19 @@ function isEdgeLineMode(value: string): value is EdgeLineMode {
   return value === 'curved' || value === 'straight'
 }
 
+function normalizeBranchLabel(value: string) {
+  const branchLabel = value.toLowerCase()
+  if (branchLabel === 'yes') {
+    return 'YES'
+  }
+
+  if (branchLabel === 'no') {
+    return 'NO'
+  }
+
+  return ''
+}
+
 function getNode(nodes: FlowNode[], nodeId: string) {
   return nodes.find((node) => node.id === nodeId)
 }
@@ -261,6 +274,7 @@ export function executeRealtimeToolCall(call: RealtimeFunctionCall): ToolResult 
   if (name === 'create_node') {
     const kind = asString(args.kind)
     const title = asString(args.title)
+    const branchLabel = normalizeBranchLabel(asString(args.branchLabel))
     const requestedAfterNodeId = asString(args.afterNodeId)
     const afterNodeId =
       requestedAfterNodeId ||
@@ -293,7 +307,7 @@ export function executeRealtimeToolCall(call: RealtimeFunctionCall): ToolResult 
     })
 
     if (afterNode) {
-      useFlowEditorStore.getState().connectNodes(afterNodeId, nodeId)
+      useFlowEditorStore.getState().connectNodes(afterNodeId, nodeId, branchLabel)
     }
 
     return {
@@ -302,6 +316,7 @@ export function executeRealtimeToolCall(call: RealtimeFunctionCall): ToolResult 
       data: {
         nodeId,
         afterNodeId: afterNode ? afterNodeId : '',
+        branchLabel,
         kind,
         title,
       },
@@ -348,6 +363,41 @@ export function executeRealtimeToolCall(call: RealtimeFunctionCall): ToolResult 
       ok: true,
       message: 'Connected nodes.',
       data: { sourceNodeId, targetNodeId },
+    }
+  }
+
+  if (name === 'disconnect_nodes') {
+    const edgeId = asString(args.edgeId)
+    const sourceNodeId = asString(args.sourceNodeId)
+    const targetNodeId = asString(args.targetNodeId)
+
+    if (
+      !edgeId &&
+      (!sourceNodeId || !state.edges.some((edge) => edge.source === sourceNodeId))
+    ) {
+      return {
+        ok: false,
+        message: 'disconnect_nodes needs an edgeId or a valid sourceNodeId.',
+      }
+    }
+
+    const removedCount = state.disconnectNodes({
+      edgeId,
+      sourceNodeId,
+      targetNodeId,
+    })
+
+    if (removedCount === 0) {
+      return { ok: false, message: 'No matching connection found.' }
+    }
+
+    return {
+      ok: true,
+      message:
+        removedCount === 1
+          ? 'Disconnected one line.'
+          : `Disconnected ${removedCount} lines.`,
+      data: { edgeId, removedCount, sourceNodeId, targetNodeId },
     }
   }
 
