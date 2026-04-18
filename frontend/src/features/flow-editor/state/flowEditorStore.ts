@@ -13,6 +13,7 @@ import { initialEdges, initialNodes } from '../canvas/initialFlow'
 import {
   createId,
   getDefaultTitle,
+  getChildFanoutPosition,
   normalizeDecisionEdges,
 } from '../canvas/flowUtils'
 import type {
@@ -80,6 +81,7 @@ type FlowEditorState = {
   selectedNodeId: string | null
   loadFlow: (flow: FlowDocument) => void
   setAiContext: (aiContext: string) => void
+  setFlowDescription: (description: string) => void
   setFlowName: (name: string) => void
   setEdgeLineMode: (edgeLineMode: EdgeLineMode) => void
   setSelectedNodeId: (nodeId: string | null) => void
@@ -157,9 +159,10 @@ export const useFlowEditorStore = create<FlowEditorState>((set) => ({
       selectedNodeId: null,
     }),
   setAiContext: (aiContext) => set({ aiContext }),
+  setFlowDescription: (description) => set({ flowDescription: description }),
   setFlowName: (name) =>
     set({
-      flowName: name.trim() || 'Untitled flow',
+      flowName: name,
     }),
   setEdgeLineMode: (edgeLineMode) =>
     set((state) => ({
@@ -247,10 +250,16 @@ export const useFlowEditorStore = create<FlowEditorState>((set) => ({
     set((state) => {
       const nodeId = createId('node')
       const normalizedSourceHandle = getValidSourceHandle(sourceHandle)
+      const nextPosition = getChildFanoutPosition({
+        edges: state.edges,
+        nodes: state.nodes,
+        preferredPosition: position,
+        sourceNodeId,
+      })
       const nextNode: FlowNode = {
         id: nodeId,
         type: 'flowNode',
-        position,
+        position: nextPosition,
         data: {
           kind,
           title: getDefaultTitle(kind),

@@ -12,21 +12,23 @@ const channelLabels: Record<TaskChannel, string> = {
 
 const statusLabels: Record<TaskStatus, string> = {
   todo: 'Todo',
-  in_progress: 'In progress',
+  in_progress: 'Doing',
   done: 'Done',
   cancelled: 'Cancelled',
 }
 
 const statusControlTone: Record<TaskStatus, string> = {
-  todo: 'bg-zinc-100 text-zinc-700 ring-zinc-950/8',
-  in_progress: 'bg-blue-50 text-blue-700 ring-blue-200',
-  done: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  cancelled: 'bg-red-50 text-red-700 ring-red-200',
+  todo: 'border-zinc-950/8 bg-zinc-50 text-zinc-600',
+  in_progress: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+  done: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  cancelled: 'border-rose-200 bg-rose-50 text-rose-700',
 }
 
-const fieldLabelClass = 'text-[0.72rem] font-medium text-zinc-500'
-const controlClass =
-  'w-full rounded-xl bg-white px-3 py-2.5 text-sm text-zinc-950 ring-1 ring-zinc-950/8 outline-none transition focus:ring-2 focus:ring-blue-200 max-sm:text-base'
+const filterLabelClass =
+  'font-mono text-[0.68rem] font-medium uppercase tracking-[0.14em] text-zinc-400'
+
+const baseControlClass =
+  'h-11 w-full rounded-lg border border-zinc-950/8 bg-white px-3 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 max-sm:text-base'
 
 type WorkflowTasksTableProps = {
   onOpenNode: () => void
@@ -40,20 +42,197 @@ function SummaryStat({
   value: number
 }) {
   return (
-    <div className="grid gap-1 px-4 py-3 sm:px-5">
-      <p className="truncate text-[0.72rem] font-medium text-zinc-500">{label}</p>
-      <p className="text-2xl font-semibold tabular-nums text-zinc-950">{value}</p>
+    <div className="grid min-w-28 gap-1 px-6 py-3">
+      <p className="truncate text-sm text-zinc-500">{label}</p>
+      <p className="text-4xl font-semibold tracking-tight text-zinc-950">
+        {value}
+      </p>
     </div>
   )
 }
 
 function getInitials(name: string) {
-  return name
+  const initials = name
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('')
+
+  return initials || '--'
+}
+
+function formatDueLabel(due: string) {
+  if (!due) {
+    return 'No due date'
+  }
+
+  const parsed = new Date(due)
+
+  if (Number.isNaN(parsed.getTime())) {
+    return due
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'short',
+  }).format(parsed)
+}
+
+function ChannelBadge({ channel }: { channel: TaskChannel }) {
+  if (channel === 'whatsapp') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-md bg-emerald-50 px-2.5 py-1 text-sm font-medium text-emerald-700">
+        <span className="size-1.5 rounded-full bg-emerald-500" />
+        {channelLabels[channel]}
+      </span>
+    )
+  }
+
+  if (channel === 'call') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1 text-sm font-medium text-amber-700">
+        <svg
+          aria-hidden="true"
+          className="size-3.5"
+          fill="none"
+          viewBox="0 0 16 16"
+        >
+          <path
+            d="M4.5 2.5h2l1 3-1.5 1.5a9 9 0 0 0 3 3L10.5 8.5l3 1v2a1 1 0 0 1-1 1A10 10 0 0 1 2.5 3.5a1 1 0 0 1 1-1Z"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.25"
+          />
+        </svg>
+        {channelLabels[channel]}
+      </span>
+    )
+  }
+
+  if (channel === 'email') {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 text-sm font-medium text-sky-700">
+        <svg
+          aria-hidden="true"
+          className="size-3.5"
+          fill="none"
+          viewBox="0 0 16 16"
+        >
+          <rect
+            height="9"
+            rx="1.5"
+            stroke="currentColor"
+            strokeWidth="1.25"
+            width="12"
+            x="2"
+            y="3.5"
+          />
+          <path
+            d="m3 5 5 3.5L13 5"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.25"
+          />
+        </svg>
+        {channelLabels[channel]}
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-md bg-zinc-100 px-2.5 py-1 text-sm font-medium text-zinc-700">
+      <span className="size-1.5 rounded-full bg-zinc-500" />
+      {channelLabels[channel]}
+    </span>
+  )
+}
+
+function FilterSelect({
+  name,
+  onChange,
+  options,
+  value,
+}: {
+  name: string
+  onChange: (value: string) => void
+  options: Array<{ label: string; value: string }>
+  value: string
+}) {
+  return (
+    <div className="inline-grid grid-cols-[1fr_2rem] items-center">
+      <select
+        className={`${baseControlClass} col-span-full row-start-1 appearance-none pr-9`}
+        name={name}
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <svg
+        aria-hidden="true"
+        className="pointer-events-none col-start-2 row-start-1 mr-3 size-3.5 justify-self-end text-zinc-400"
+        fill="none"
+        viewBox="0 0 8 5"
+      >
+        <path
+          d="M.75.75 4 4l3.25-3.25"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.25"
+        />
+      </svg>
+    </div>
+  )
+}
+
+function StatusSelect({
+  name,
+  onChange,
+  status,
+}: {
+  name: string
+  onChange: (value: TaskStatus) => void
+  status: TaskStatus
+}) {
+  return (
+    <div className="inline-grid min-w-28 grid-cols-[1fr_1.75rem] items-center">
+      <select
+        aria-label="Task status"
+        className={`col-span-full row-start-1 h-10 appearance-none rounded-lg border px-3 pr-8 text-sm font-medium outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 ${statusControlTone[status]}`}
+        name={name}
+        onChange={(event) => onChange(event.target.value as TaskStatus)}
+        value={status}
+      >
+        {Object.entries(statusLabels).map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+      <svg
+        aria-hidden="true"
+        className="pointer-events-none col-start-2 row-start-1 mr-2.5 size-3.5 justify-self-end"
+        fill="none"
+        viewBox="0 0 8 5"
+      >
+        <path
+          d="M.75.75 4 4l3.25-3.25"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.25"
+        />
+      </svg>
+    </div>
+  )
 }
 
 export function WorkflowTasksTable({ onOpenNode }: WorkflowTasksTableProps) {
@@ -118,7 +297,6 @@ export function WorkflowTasksTable({ onOpenNode }: WorkflowTasksTableProps) {
   const openTaskCount = tasks.filter(
     (task) => task.status !== 'done' && task.status !== 'cancelled',
   ).length
-  const doneTaskCount = tasks.filter((task) => task.status === 'done').length
   const hasActiveFilters =
     query.trim() ||
     statusFilter !== 'all' ||
@@ -139,124 +317,132 @@ export function WorkflowTasksTable({ onOpenNode }: WorkflowTasksTableProps) {
     onOpenNode()
   }
 
+  const statusOptions = [
+    { label: 'All', value: 'all' },
+    ...Object.entries(statusLabels).map(([value, label]) => ({
+      label,
+      value,
+    })),
+  ]
+  const assigneeFilterOptions = [
+    { label: 'All', value: 'all' },
+    ...assigneeOptions.map((assignee) => ({ label: assignee, value: assignee })),
+  ]
+  const channelOptions = [
+    { label: 'All', value: 'all' },
+    ...Object.entries(channelLabels).map(([value, label]) => ({
+      label,
+      value,
+    })),
+  ]
+  const nodeOptions = [
+    { label: 'All', value: 'all' },
+    ...nodes.map((node) => ({
+      label: node.data.title || 'Untitled node',
+      value: node.id,
+    })),
+  ]
+
   return (
-    <section className="min-h-0 flex-1 overflow-auto bg-[oklch(0.985_0.002_240)]">
-      <div className="mx-auto grid w-full max-w-[104rem] gap-6 p-6 lg:p-8">
-        <header className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-          <div className="grid gap-2">
-            <div className="w-fit rounded-full bg-zinc-100 px-2.5 py-1 text-[0.72rem] font-medium text-zinc-600 ring-1 ring-zinc-950/8">
-              Execution board
-            </div>
-            <div className="grid gap-1">
-              <h1 className="max-w-[18ch] text-2xl font-semibold tracking-tight text-balance text-zinc-950">
-                Workflow tasks
-              </h1>
-              <p className="max-w-[60ch] text-sm/6 text-pretty text-zinc-600">
-                Track execution work created from notes and nodes.
-              </p>
-            </div>
+    <section className="min-h-0 flex-1 overflow-auto bg-[oklch(0.992_0.002_240)]">
+      <div className="mx-auto flex w-full max-w-[104rem] flex-col gap-6 px-6 py-7 lg:px-8 lg:py-8">
+        <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="grid gap-1">
+            <h1 className="text-4xl font-semibold tracking-tight text-balance text-zinc-950">
+              Workflow tasks
+            </h1>
+            <p className="max-w-[48ch] text-base text-pretty text-zinc-500">
+              Track execution work created from notes and nodes.
+            </p>
           </div>
 
-          <div className="grid overflow-hidden rounded-xl bg-white ring-1 ring-zinc-950/8 sm:grid-cols-3">
+          <div className="grid w-fit grid-cols-2 overflow-hidden rounded-lg border border-zinc-950/8 bg-white">
             <SummaryStat label="Total" value={tasks.length} />
-            <div className="border-t border-zinc-950/8 sm:border-t-0 sm:border-l">
+            <div className="border-l border-zinc-950/8">
               <SummaryStat label="Open" value={openTaskCount} />
-            </div>
-            <div className="border-t border-zinc-950/8 sm:border-t-0 sm:border-l">
-              <SummaryStat label="Done" value={doneTaskCount} />
             </div>
           </div>
         </header>
 
-        <section className="rounded-xl bg-white p-4 ring-1 ring-zinc-950/8">
-          <div className="grid gap-3 xl:grid-cols-[minmax(18rem,2fr)_10rem_10rem_10rem_12rem_auto]">
+        <section className="rounded-lg border border-zinc-950/8 bg-white p-4">
+          <div className="grid gap-3 xl:grid-cols-[minmax(16rem,2.2fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_auto]">
             <label className="grid gap-1.5">
-              <p className={fieldLabelClass}>Search</p>
-              <input
-                className={controlClass}
-                name="task-search"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Title, owner, node"
-                type="search"
-                value={query}
+              <span className={filterLabelClass}>Search</span>
+              <div className="relative">
+                <svg
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400"
+                  fill="none"
+                  viewBox="0 0 16 16"
+                >
+                  <circle
+                    cx="7"
+                    cy="7"
+                    r="4.75"
+                    stroke="currentColor"
+                    strokeWidth="1.25"
+                  />
+                  <path
+                    d="m10.5 10.5 3 3"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="1.25"
+                  />
+                </svg>
+                <input
+                  className={`${baseControlClass} pl-10`}
+                  name="task-search"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Title, owner, node"
+                  type="search"
+                  value={query}
+                />
+              </div>
+            </label>
+
+            <label className="grid gap-1.5">
+              <span className={filterLabelClass}>Status</span>
+              <FilterSelect
+                name="task-status-filter"
+                onChange={(value) => setStatusFilter(value as 'all' | TaskStatus)}
+                options={statusOptions}
+                value={statusFilter}
               />
             </label>
 
             <label className="grid gap-1.5">
-              <p className={fieldLabelClass}>Status</p>
-              <select
-                className={controlClass}
-                name="task-status-filter"
-                onChange={(event) =>
-                  setStatusFilter(event.target.value as 'all' | TaskStatus)
-                }
-                value={statusFilter}
-              >
-                <option value="all">All</option>
-                {Object.entries(statusLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="grid gap-1.5">
-              <p className={fieldLabelClass}>Owner</p>
-              <select
-                className={controlClass}
+              <span className={filterLabelClass}>Owner</span>
+              <FilterSelect
                 name="task-assignee-filter"
-                onChange={(event) => setAssigneeFilter(event.target.value)}
+                onChange={setAssigneeFilter}
+                options={assigneeFilterOptions}
                 value={assigneeFilter}
-              >
-                <option value="all">All</option>
-                {assigneeOptions.map((assignee) => (
-                  <option key={assignee} value={assignee}>
-                    {assignee}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
 
             <label className="grid gap-1.5">
-              <p className={fieldLabelClass}>Channel</p>
-              <select
-                className={controlClass}
+              <span className={filterLabelClass}>Channel</span>
+              <FilterSelect
                 name="task-channel-filter"
-                onChange={(event) =>
-                  setChannelFilter(event.target.value as 'all' | TaskChannel)
-                }
+                onChange={(value) => setChannelFilter(value as 'all' | TaskChannel)}
+                options={channelOptions}
                 value={channelFilter}
-              >
-                <option value="all">All</option>
-                {Object.entries(channelLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
 
             <label className="grid gap-1.5">
-              <p className={fieldLabelClass}>Node</p>
-              <select
-                className={controlClass}
+              <span className={filterLabelClass}>Node</span>
+              <FilterSelect
                 name="task-node-filter"
-                onChange={(event) => setNodeFilter(event.target.value)}
+                onChange={setNodeFilter}
+                options={nodeOptions}
                 value={nodeFilter}
-              >
-                <option value="all">All</option>
-                {nodes.map((node) => (
-                  <option key={node.id} value={node.id}>
-                    {node.data.title || 'Untitled node'}
-                  </option>
-                ))}
-              </select>
+              />
             </label>
 
             <div className="flex items-end">
               <button
-                className="w-full rounded-xl bg-zinc-100 px-3 py-2.5 text-sm font-medium text-zinc-700 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                className="h-11 w-full rounded-lg border border-zinc-950/8 bg-zinc-50 px-3 text-sm font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                 disabled={!hasActiveFilters}
                 onClick={clearFilters}
                 type="button"
@@ -268,148 +454,155 @@ export function WorkflowTasksTable({ onOpenNode }: WorkflowTasksTableProps) {
         </section>
 
         {tasks.length === 0 ? (
-          <div className="grid place-items-center rounded-xl bg-white px-6 py-16 text-center ring-1 ring-zinc-950/8">
+          <div className="grid min-h-64 place-items-center rounded-lg border border-zinc-950/8 bg-white px-6 text-center">
             <div className="grid max-w-sm gap-2">
-              <p className="text-sm font-semibold text-zinc-950">No tasks yet</p>
-              <p className="text-sm/6 text-zinc-600">
+              <p className="text-base font-semibold text-zinc-950">No tasks yet</p>
+              <p className="text-base text-pretty text-zinc-500">
                 Add a note on a node, then convert it into a task.
               </p>
             </div>
           </div>
         ) : filteredTasks.length === 0 ? (
-          <div className="grid place-items-center rounded-xl bg-white px-6 py-16 text-center ring-1 ring-zinc-950/8">
+          <div className="grid min-h-64 place-items-center rounded-lg border border-zinc-950/8 bg-white px-6 text-center">
             <div className="grid max-w-sm gap-2">
-              <p className="text-sm font-semibold text-zinc-950">No matching tasks</p>
-              <p className="text-sm/6 text-zinc-600">
+              <p className="text-base font-semibold text-zinc-950">
+                No matching tasks
+              </p>
+              <p className="text-base text-pretty text-zinc-500">
                 Clear filters or search for another task.
               </p>
             </div>
           </div>
         ) : (
-          <div className="grid gap-3" role="list">
-            {filteredTasks.map((task) => {
-              const overdue = isTaskOverdue(task)
-              const nodeTitle = nodeTitleById.get(task.nodeId) ?? 'Node'
-              const ownerName = task.assignee || 'Unassigned'
-              const ownerInitials = task.assignee ? getInitials(task.assignee) : 'NA'
+          <section className="overflow-hidden rounded-lg border border-zinc-950/8 bg-white">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-950/8">
+                    <th className="px-5 py-4 text-left font-mono text-[0.68rem] font-medium uppercase tracking-[0.14em] whitespace-nowrap text-zinc-400">
+                      Task
+                    </th>
+                    <th className="px-4 py-4 text-left font-mono text-[0.68rem] font-medium uppercase tracking-[0.14em] whitespace-nowrap text-zinc-400">
+                      Owner
+                    </th>
+                    <th className="px-4 py-4 text-left font-mono text-[0.68rem] font-medium uppercase tracking-[0.14em] whitespace-nowrap text-zinc-400">
+                      Due
+                    </th>
+                    <th className="px-4 py-4 text-left font-mono text-[0.68rem] font-medium uppercase tracking-[0.14em] whitespace-nowrap text-zinc-400">
+                      Channel
+                    </th>
+                    <th className="px-4 py-4 text-left font-mono text-[0.68rem] font-medium uppercase tracking-[0.14em] whitespace-nowrap text-zinc-400">
+                      Status
+                    </th>
+                    <th className="px-4 py-4 text-left font-mono text-[0.68rem] font-medium uppercase tracking-[0.14em] whitespace-nowrap text-zinc-400">
+                      Node
+                    </th>
+                    <th className="px-5 py-4 text-right font-mono text-[0.68rem] font-medium uppercase tracking-[0.14em] whitespace-nowrap text-zinc-400">
+                      &nbsp;
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTasks.map((task) => {
+                    const overdue =
+                      task.status !== 'done' &&
+                      task.status !== 'cancelled' &&
+                      isTaskOverdue(task)
+                    const nodeTitle = nodeTitleById.get(task.nodeId) ?? 'Untitled node'
+                    const ownerName = task.assignee || 'Unassigned'
+                    const ownerInitials = getInitials(ownerName)
 
-              return (
-                <article
-                  className={`grid gap-4 rounded-xl p-4 ring-1 transition hover:ring-zinc-950/15 lg:grid-cols-[minmax(18rem,2.1fr)_minmax(10rem,1fr)_8rem_8rem_10rem_minmax(14rem,1.2fr)_auto] lg:items-start ${
-                    overdue ? 'bg-red-50/50 ring-red-200' : 'bg-white ring-zinc-950/8'
-                  }`}
-                  key={task.id}
-                  role="listitem"
-                >
-                  <div className="grid gap-2">
-                    <p className={fieldLabelClass}>Task</p>
-                    <div className="grid gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p
-                          className={`min-w-0 text-sm font-semibold ${
-                            task.status === 'done'
-                              ? 'text-zinc-400 line-through'
-                              : 'text-zinc-950'
-                          }`}
-                        >
-                          {task.title}
-                        </p>
-                        {task.sourceNoteId ? (
-                          <div className="rounded-full bg-blue-50 px-2 py-1 text-[0.72rem] font-semibold text-blue-700">
-                            Source note
+                    return (
+                      <tr
+                        className="border-b border-zinc-950/8 last:border-b-0 hover:bg-zinc-50/70"
+                        key={task.id}
+                      >
+                        <td className="px-5 py-5 align-middle">
+                          <div className="flex min-w-[18rem] flex-col gap-1.5">
+                            <div className="flex items-center gap-2">
+                              <p
+                                className={`text-[1.05rem] font-medium text-zinc-950 ${
+                                  task.status === 'done' ? 'text-zinc-400 line-through' : ''
+                                }`}
+                              >
+                                {task.title}
+                              </p>
+                              {task.sourceNoteId ? (
+                                <span className="rounded-md bg-zinc-100 px-2 py-1 text-sm text-zinc-500">
+                                  Note
+                                </span>
+                              ) : null}
+                            </div>
+                            {task.details ? (
+                              <p className="max-w-[42ch] truncate text-sm text-zinc-500">
+                                {task.details}
+                              </p>
+                            ) : null}
                           </div>
-                        ) : null}
-                        {overdue ? (
-                          <div className="rounded-full bg-red-50 px-2 py-1 text-[0.72rem] font-semibold text-red-700">
-                            Overdue
+                        </td>
+
+                        <td className="px-4 py-5 align-middle">
+                          <div className="flex min-w-40 items-center gap-2.5">
+                            <div className="grid size-7 shrink-0 place-items-center rounded-full bg-zinc-500 text-[0.62rem] font-semibold tracking-[0.04em] text-white">
+                              {ownerInitials}
+                            </div>
+                            <p className="truncate text-base text-zinc-700">{ownerName}</p>
                           </div>
-                        ) : null}
-                      </div>
-                      {task.details ? (
-                        <p className="max-w-[70ch] text-sm/6 text-pretty text-zinc-600">
-                          {task.details}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
+                        </td>
 
-                  <div className="grid gap-2">
-                    <p className={fieldLabelClass}>Owner</p>
-                    <div className="flex items-center gap-2">
-                      <div className="grid size-8 place-items-center rounded-full bg-zinc-100 text-[0.72rem] font-semibold text-zinc-700 ring-1 ring-zinc-950/8">
-                        {ownerInitials}
-                      </div>
-                      <p className="text-sm text-zinc-700">{ownerName}</p>
-                    </div>
-                  </div>
+                        <td className="px-4 py-5 align-middle">
+                          <div className="grid min-w-20 gap-1">
+                            <p
+                              className={`text-base tabular-nums ${
+                                overdue ? 'font-medium text-red-600' : 'text-zinc-700'
+                              }`}
+                            >
+                              {formatDueLabel(task.due)}
+                            </p>
+                            {overdue ? (
+                              <p className="text-sm font-medium text-red-500">Overdue</p>
+                            ) : null}
+                          </div>
+                        </td>
 
-                  <div className="grid gap-2">
-                    <p className={fieldLabelClass}>Due</p>
-                    <p
-                      className={`text-sm tabular-nums ${
-                        overdue ? 'font-medium text-red-700' : 'text-zinc-700'
-                      }`}
-                    >
-                      {task.due || '-'}
-                    </p>
-                  </div>
+                        <td className="px-4 py-5 align-middle">
+                          <div className="min-w-28">
+                            <ChannelBadge channel={task.channel} />
+                          </div>
+                        </td>
 
-                  <div className="grid gap-2">
-                    <p className={fieldLabelClass}>Channel</p>
-                    <div className="w-fit rounded-full bg-zinc-100 px-2.5 py-1 text-[0.72rem] font-medium text-zinc-600">
-                      {channelLabels[task.channel]}
-                    </div>
-                  </div>
+                        <td className="px-4 py-5 align-middle">
+                          <StatusSelect
+                            name={`task-status-${task.id}`}
+                            onChange={(value) => updateTask(task.id, { status: value })}
+                            status={task.status}
+                          />
+                        </td>
 
-                  <label className="grid gap-2">
-                    <p className={fieldLabelClass}>Status</p>
-                    <select
-                      aria-label="Task status"
-                      className={`rounded-xl px-3 py-2 text-sm font-medium outline-none ring-1 transition focus:ring-2 focus:ring-blue-200 max-sm:text-base ${
-                        overdue && task.status !== 'done'
-                          ? 'bg-red-50 text-red-700 ring-red-200'
-                          : statusControlTone[task.status]
-                      }`}
-                      name={`task-status-${task.id}`}
-                      onChange={(event) =>
-                        updateTask(task.id, {
-                          status: event.target.value as TaskStatus,
-                        })
-                      }
-                      value={task.status}
-                    >
-                      {Object.entries(statusLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                        <td className="px-4 py-5 align-middle">
+                          <p className="min-w-56 text-base text-zinc-600">
+                            {nodeTitle}
+                          </p>
+                        </td>
 
-                  <div className="grid gap-2">
-                    <p className={fieldLabelClass}>Node</p>
-                    <button
-                      className="min-w-0 text-left text-sm font-medium text-zinc-700 transition hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                      onClick={() => openNode(task.nodeId)}
-                      type="button"
-                    >
-                      {nodeTitle}
-                    </button>
-                  </div>
-
-                  <div className="flex items-start lg:justify-end">
-                    <button
-                      className="rounded-xl bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                      onClick={() => openNode(task.nodeId)}
-                      type="button"
-                    >
-                      Open
-                    </button>
-                  </div>
-                </article>
-              )
-            })}
-          </div>
+                        <td className="px-5 py-5 align-middle">
+                          <div className="flex justify-end">
+                            <button
+                              className="rounded-lg border border-zinc-950/8 bg-white px-3 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                              onClick={() => openNode(task.nodeId)}
+                              type="button"
+                            >
+                              Open node
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
       </div>
     </section>

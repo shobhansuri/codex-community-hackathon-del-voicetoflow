@@ -264,7 +264,7 @@ export function FlowDashboardPage() {
             <AppMark />
             <div className="grid gap-0.5">
               <p className="text-sm font-semibold text-zinc-950">VoiceToFlow</p>
-              <p className="text-sm text-zinc-500">Flow workspace</p>
+              <p className="text-sm text-zinc-500">Flows</p>
             </div>
           </Link>
 
@@ -421,7 +421,7 @@ export function FlowDashboardPage() {
                         : 'Start a new flow'}
                     </p>
                     <p className="text-base text-zinc-600">
-                      Begin with an empty canvas and shape the workflow from there.
+                      Begin with an empty canvas and shape the flow from there.
                     </p>
                   </div>
                 </div>

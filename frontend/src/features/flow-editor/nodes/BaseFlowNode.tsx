@@ -554,7 +554,7 @@ export function BaseFlowNode({ data, id, selected }: NodeProps<FlowNode>) {
             <div className="grid gap-2">
               {previewTasks.map((task) => (
                 <div
-                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
+                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2"
                   key={task.id}
                 >
                   <button
@@ -575,7 +575,7 @@ export function BaseFlowNode({ data, id, selected }: NodeProps<FlowNode>) {
                     <TaskStatusIcon done={task.status === 'done'} />
                   </button>
                   <p
-                    className={`truncate text-[0.875rem] ${
+                    className={`line-clamp-2 text-[0.875rem] leading-5 ${
                       task.status === 'done'
                         ? 'text-zinc-400 line-through'
                         : isTaskOverdue(task)

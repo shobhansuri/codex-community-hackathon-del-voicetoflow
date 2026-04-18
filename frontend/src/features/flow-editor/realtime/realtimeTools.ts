@@ -1,11 +1,13 @@
 import type {
   EdgeLineMode,
   FlowDoc,
+  FlowEdge,
   FlowNode,
   FlowNodeKind,
   NodeTask,
   TaskChannel,
 } from '../canvas/flowTypes'
+import { getChildFanoutPosition } from '../canvas/flowUtils'
 import { useFlowEditorStore } from '../state/flowEditorStore'
 
 const nodeKinds: FlowNodeKind[] = [
@@ -174,17 +176,26 @@ function getEstimatedNodeWidth(node: FlowNode) {
 function getNextNodePosition(
   afterNode: FlowNode | undefined,
   index: number,
+  nodes: FlowNode[],
+  edges: FlowEdge[],
   tasks: NodeTask[],
   docs: FlowDoc[],
 ) {
   if (afterNode) {
-    return {
+    const preferredPosition = {
       x: afterNode.position.x,
       y:
         afterNode.position.y +
         getEstimatedNodeHeight(afterNode, tasks, docs) +
         nodeVerticalGap,
     }
+
+    return getChildFanoutPosition({
+      edges,
+      nodes,
+      preferredPosition,
+      sourceNodeId: afterNode.id,
+    })
   }
 
   return {
@@ -260,6 +271,8 @@ export function executeRealtimeToolCall(call: RealtimeFunctionCall): ToolResult 
     const defaultPosition = getNextNodePosition(
       afterNode,
       state.nodes.length,
+      state.nodes,
+      state.edges,
       state.tasks,
       state.docs,
     )

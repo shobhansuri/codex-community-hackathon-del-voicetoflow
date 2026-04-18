@@ -1,4 +1,10 @@
+import type { XYPosition } from '@xyflow/react'
 import type { FlowEdge, FlowNode, FlowNodeKind } from './flowTypes'
+
+const childHorizontalGap = 340
+const childCollisionWidth = 250
+const childCollisionHeight = 180
+const childFanoutOffsets = [0, 1, -1, 2, -2, 3, -3, 4, -4]
 
 export function createId(prefix: string) {
   return `${prefix}_${crypto.randomUUID()}`
@@ -17,6 +23,50 @@ export function getDefaultTitle(kind: FlowNodeKind) {
   }
 
   return titles[kind]
+}
+
+function isPositionClear(position: XYPosition, siblingNodes: FlowNode[]) {
+  return siblingNodes.every(
+    (node) =>
+      Math.abs(node.position.x - position.x) >= childCollisionWidth ||
+      Math.abs(node.position.y - position.y) >= childCollisionHeight,
+  )
+}
+
+export function getChildFanoutPosition({
+  edges,
+  nodes,
+  preferredPosition,
+  sourceNodeId,
+}: {
+  edges: FlowEdge[]
+  nodes: FlowNode[]
+  preferredPosition: XYPosition
+  sourceNodeId: string
+}) {
+  const sourceNode = nodes.find((node) => node.id === sourceNodeId)
+  const siblingNodes = edges
+    .filter((edge) => edge.source === sourceNodeId)
+    .map((edge) => nodes.find((node) => node.id === edge.target))
+    .filter((node): node is FlowNode => Boolean(node))
+
+  if (siblingNodes.length === 0 || isPositionClear(preferredPosition, siblingNodes)) {
+    return preferredPosition
+  }
+
+  const baseX = sourceNode?.position.x ?? preferredPosition.x
+  const candidatePositions = childFanoutOffsets.map((offset) => ({
+    x: baseX + offset * childHorizontalGap,
+    y: preferredPosition.y,
+  }))
+
+  return (
+    candidatePositions.find((position) => isPositionClear(position, siblingNodes)) ??
+    {
+      x: baseX + siblingNodes.length * childHorizontalGap,
+      y: preferredPosition.y,
+    }
+  )
 }
 
 function normalizeBranchLabel(label: unknown) {

@@ -51,8 +51,8 @@ export function DocsWorkspace({ onOpenNode }: DocsWorkspaceProps) {
               Doc modals
             </h1>
             <p className="mt-1 max-w-[64ch] text-sm/6 text-zinc-600">
-              Keep longer workflow context here. A doc can stand alone or attach
-              to one node.
+              Keep longer flow context here. A doc can stand alone or attach to
+              one node.
             </p>
           </div>
           <button

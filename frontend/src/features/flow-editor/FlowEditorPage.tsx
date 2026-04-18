@@ -102,35 +102,13 @@ function WorkspaceTabButton({
   )
 }
 
-function EdgeModeButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean
-  children: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      className={`rounded-lg px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-        active
-          ? 'bg-zinc-950 text-white'
-          : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950'
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      {children}
-    </button>
-  )
-}
-
 export function FlowEditorPage() {
   const { flowId } = useParams()
   const [activeWorkspaceTab, setActiveWorkspaceTab] =
     useState<WorkspaceTab>('flowchart')
   const [contextOpen, setContextOpen] = useState(false)
+  const [viewMenuOpen, setViewMenuOpen] = useState(false)
+  const [flowNameDraft, setFlowNameDraft] = useState('')
   const aiContext = useFlowEditorStore((state) => state.aiContext)
   const edges = useFlowEditorStore((state) => state.edges)
   const flowDescription = useFlowEditorStore((state) => state.flowDescription)
@@ -142,6 +120,10 @@ export function FlowEditorPage() {
   const loadFlow = useFlowEditorStore((state) => state.loadFlow)
   const setAiContext = useFlowEditorStore((state) => state.setAiContext)
   const setEdgeLineMode = useFlowEditorStore((state) => state.setEdgeLineMode)
+  const setFlowDescription = useFlowEditorStore(
+    (state) => state.setFlowDescription,
+  )
+  const setFlowName = useFlowEditorStore((state) => state.setFlowName)
   const realtime = useRealtimeFlow(flowId ?? '')
   const lastSavedSignatureRef = useRef<string | null>(null)
   const hasLoadedFlowRef = useRef(false)
@@ -158,6 +140,10 @@ export function FlowEditorPage() {
       hasLoadedFlowRef.current = true
     }
   }, [flowQuery.data, loadFlow])
+
+  useEffect(() => {
+    setFlowNameDraft(flowName)
+  }, [flowName])
 
   const currentFlowPayload = useMemo(
     () => ({
@@ -272,25 +258,22 @@ export function FlowEditorPage() {
     Boolean(realtime.error) ||
     realtime.messages.length > 0
   const hasUnsavedChanges = currentFlowSignature !== lastSavedSignatureRef.current
-  const saveStatusLabel = saveFlowMutation.isPending
-    ? 'Saving changes'
-    : hasUnsavedChanges
-      ? 'Unsaved changes'
-      : 'Saved'
   const saveStatusDotClass = saveFlowMutation.isPending
     ? 'bg-amber-500'
     : hasUnsavedChanges
       ? 'bg-blue-500'
       : 'bg-emerald-500'
-  const workspaceStatusDetail = realtime.error
-    ? realtime.error
-    : realtime.activity
-      ? realtime.activity
-      : saveFlowMutation.isPending
-        ? 'Syncing to workspace'
-        : hasUnsavedChanges
-          ? 'Autosave pending'
-          : 'All changes synced'
+  const saveStatusText = saveFlowMutation.isPending
+    ? 'Saving changes'
+    : hasUnsavedChanges
+      ? 'Autosave pending'
+      : 'Up to date'
+
+  function commitFlowName() {
+    const nextFlowName = flowNameDraft.trim() || 'Untitled flow'
+    setFlowNameDraft(nextFlowName)
+    setFlowName(nextFlowName)
+  }
 
   return (
     <ReactFlowProvider>
@@ -300,11 +283,11 @@ export function FlowEditorPage() {
           onOpenFlowchart={() => setActiveWorkspaceTab('flowchart')}
         />
         <main className="flex min-w-0 flex-1 flex-col">
-          <header className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-zinc-950/8 bg-white/92 px-5 py-4 backdrop-blur-md">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+          <header className="flex h-16 shrink-0 items-center justify-between gap-4 border-b border-zinc-950/8 bg-white/94 px-5 backdrop-blur-md">
+            <div className="flex min-w-0 flex-1 items-center gap-4">
               <Link
                 aria-label="Back to flows"
-                className="grid size-11 place-items-center rounded-xl bg-white text-zinc-700 ring-1 ring-zinc-950/8 transition hover:bg-zinc-50 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                className="grid size-9 shrink-0 place-items-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 to="/flows"
               >
                 <svg
@@ -323,106 +306,157 @@ export function FlowEditorPage() {
                 </svg>
               </Link>
 
-              <div className="grid min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
-                <div className="grid min-w-0 gap-1">
-                  <p className="text-[0.72rem] font-medium text-zinc-500">
-                    Flow workspace
-                  </p>
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <h1 className="truncate text-lg font-semibold tracking-tight text-zinc-950">
-                      {flowName}
-                    </h1>
-                    <div className="flex items-center gap-2 rounded-full bg-zinc-100 px-2.5 py-1 text-[0.72rem] font-semibold text-zinc-700 ring-1 ring-zinc-950/8">
-                      <div className={`size-2 rounded-full ${saveStatusDotClass}`} />
-                      <p>{saveStatusLabel}</p>
-                    </div>
-                  </div>
-                  <p className="max-w-[64ch] truncate text-sm text-zinc-600">
-                    {flowDescription || 'Map the workflow, capture context, and keep execution work close to the node.'}
-                  </p>
-                </div>
-
-                <nav
-                  aria-label="Workspace"
-                  className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl bg-zinc-100/90 p-1 ring-1 ring-zinc-950/8"
+              <div className="flex min-w-0 items-center gap-2 text-sm">
+                <Link
+                  className="shrink-0 rounded-md px-1.5 py-1 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  to="/flows"
                 >
-                  <WorkspaceTabButton
-                    active={activeWorkspaceTab === 'flowchart'}
-                    onClick={() => setActiveWorkspaceTab('flowchart')}
-                  >
-                    Flowchart
-                  </WorkspaceTabButton>
-                  <WorkspaceTabButton
-                    active={activeWorkspaceTab === 'tasks'}
-                    count={tasks.length}
-                    onClick={() => setActiveWorkspaceTab('tasks')}
-                  >
-                    Tasks
-                  </WorkspaceTabButton>
-                  <WorkspaceTabButton
-                    active={activeWorkspaceTab === 'docs'}
-                    count={docs.length}
-                    onClick={() => setActiveWorkspaceTab('docs')}
-                  >
-                    Docs
-                  </WorkspaceTabButton>
-                </nav>
+                  Flows
+                </Link>
+                <p className="shrink-0 text-zinc-300">/</p>
+                <div className="flex min-w-0 items-center gap-2">
+                    <input
+                      aria-label="Flow name"
+                      className="min-w-0 max-w-72 truncate rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm font-semibold text-zinc-950 outline-none transition hover:border-zinc-950/10 hover:bg-white focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                      onBlur={commitFlowName}
+                      onChange={(event) => setFlowNameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.currentTarget.blur()
+                        }
+                      }}
+                      value={flowNameDraft}
+                    />
+                    <div
+                      aria-label={saveStatusText}
+                      className={`size-2 rounded-full ${saveStatusDotClass}`}
+                      title={saveStatusText}
+                    />
+                </div>
               </div>
+
+              <nav
+                aria-label="Workspace"
+                className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-lg bg-zinc-100/80 p-1 ring-1 ring-zinc-950/8"
+              >
+                <WorkspaceTabButton
+                  active={activeWorkspaceTab === 'flowchart'}
+                  onClick={() => setActiveWorkspaceTab('flowchart')}
+                >
+                  Flowchart
+                </WorkspaceTabButton>
+                <WorkspaceTabButton
+                  active={activeWorkspaceTab === 'tasks'}
+                  count={tasks.length}
+                  onClick={() => setActiveWorkspaceTab('tasks')}
+                >
+                  Tasks
+                </WorkspaceTabButton>
+                <WorkspaceTabButton
+                  active={activeWorkspaceTab === 'docs'}
+                  count={docs.length}
+                  onClick={() => setActiveWorkspaceTab('docs')}
+                >
+                  Docs
+                </WorkspaceTabButton>
+              </nav>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                className={`rounded-xl px-3 py-2 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-                  aiContext.trim()
-                    ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-100 hover:bg-blue-100'
-                    : 'bg-zinc-100 text-zinc-800 hover:bg-zinc-200'
-                }`}
-                onClick={() => setContextOpen(true)}
-                type="button"
-              >
-                Context
-              </button>
-
-              <div className="inline-flex items-center gap-1 rounded-xl bg-white p-1 pr-1.5 ring-1 ring-zinc-950/8">
-                <p className="px-2 text-[0.72rem] font-medium text-zinc-500">Lines</p>
-                <EdgeModeButton
-                  active={settings.edgeLineMode === 'curved'}
-                  onClick={() => setEdgeLineMode('curved')}
+            <div className="flex shrink-0 items-center justify-end gap-2">
+              <div className="relative">
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/8 transition hover:bg-zinc-50 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                  onClick={() => setViewMenuOpen((isOpen) => !isOpen)}
+                  type="button"
                 >
-                  Curved
-                </EdgeModeButton>
-                <EdgeModeButton
-                  active={settings.edgeLineMode === 'straight'}
-                  onClick={() => setEdgeLineMode('straight')}
-                >
-                  Straight
-                </EdgeModeButton>
+                  <svg
+                    aria-hidden="true"
+                    className="size-4"
+                    fill="none"
+                    viewBox="0 0 16 16"
+                  >
+                    <path
+                      d="M3.5 5.5h9M3.5 8h9M3.5 10.5h9"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeWidth="1.5"
+                    />
+                  </svg>
+                  View
+                </button>
+                {viewMenuOpen ? (
+                  <div className="absolute right-0 top-full z-30 mt-2 grid w-64 gap-3 rounded-lg bg-white p-3 shadow-[0_24px_48px_-28px_rgba(24,24,27,0.45)] ring-1 ring-zinc-950/10">
+                    <label className="grid gap-1.5">
+                      <p className="text-[0.72rem] font-medium text-zinc-500">
+                        Flow note
+                      </p>
+                      <input
+                        aria-label="Flow description"
+                        className="rounded-md border border-zinc-950/10 bg-white px-2.5 py-2 text-sm text-zinc-800 outline-none transition placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        onChange={(event) =>
+                          setFlowDescription(event.target.value)
+                        }
+                        placeholder="Add a short note."
+                        value={flowDescription}
+                      />
+                    </label>
+                    <div className="grid gap-1.5">
+                      <p className="text-[0.72rem] font-medium text-zinc-500">
+                        Lines
+                      </p>
+                      <div className="grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1">
+                        <button
+                          className={`rounded-md px-2.5 py-1.5 text-sm font-medium transition ${
+                            settings.edgeLineMode === 'curved'
+                              ? 'bg-white text-zinc-950 shadow-[0_10px_18px_-16px_rgba(24,24,27,0.4)]'
+                              : 'text-zinc-600 hover:text-zinc-950'
+                          }`}
+                          onClick={() => setEdgeLineMode('curved')}
+                          type="button"
+                        >
+                          Curved
+                        </button>
+                        <button
+                          className={`rounded-md px-2.5 py-1.5 text-sm font-medium transition ${
+                            settings.edgeLineMode === 'straight'
+                              ? 'bg-white text-zinc-950 shadow-[0_10px_18px_-16px_rgba(24,24,27,0.4)]'
+                              : 'text-zinc-600 hover:text-zinc-950'
+                          }`}
+                          onClick={() => setEdgeLineMode('straight')}
+                          type="button"
+                        >
+                          Straight
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      className={`rounded-md px-2.5 py-2 text-left text-sm font-medium transition ${
+                        aiContext.trim()
+                          ? 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                          : 'bg-zinc-50 text-zinc-700 hover:bg-zinc-100'
+                      }`}
+                      onClick={() => {
+                        setContextOpen(true)
+                        setViewMenuOpen(false)
+                      }}
+                      type="button"
+                    >
+                      Flow context
+                    </button>
+                  </div>
+                ) : null}
               </div>
-
-              <div className="hidden max-w-64 rounded-xl bg-white px-3 py-2.5 ring-1 ring-zinc-950/8 lg:block">
-                <p className="text-[0.72rem] font-medium text-zinc-500">Workspace</p>
-                {realtime.error ? (
-                  <p className="truncate text-sm font-medium text-red-600">
-                    {workspaceStatusDetail}
-                  </p>
-                ) : (
-                  <p className="truncate text-sm font-medium text-zinc-700">
-                    {workspaceStatusDetail}
-                  </p>
-                )}
-              </div>
-
               <button
-                className="rounded-xl bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-zinc-700 ring-1 ring-zinc-950/8 transition hover:bg-zinc-50 hover:text-zinc-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 disabled={saveFlowMutation.isPending}
                 onClick={() => saveFlowMutation.mutate()}
                 type="button"
               >
-                {saveFlowMutation.isPending ? 'Saving...' : 'Save'}
+                {saveFlowMutation.isPending ? 'Saving' : 'Share'}
               </button>
               <button
                 aria-pressed={realtime.isActive}
-                className={`rounded-xl px-3 py-2 text-sm font-semibold text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                className={`rounded-lg px-3 py-2 text-sm font-semibold text-white transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
                   realtime.isActive
                     ? 'bg-red-600 hover:bg-red-700'
                     : 'bg-blue-600 hover:bg-blue-700'
