@@ -2,6 +2,10 @@
 
 VoiceToFlow is a flowchart planning app that turns process diagrams into executable work. Users can build Lucidchart-style flows on a React Flow canvas, attach notes, docs, and tasks to nodes, and use voice to ask an OpenAI Realtime assistant to update the flow.
 
+## Demo
+
+[Watch the demo video](./codex-community-hackathon-del-voicetoflow-demo-video.webm)
+
 The product is designed around a simple planning loop:
 
 - create flowchart nodes and connect them visually
